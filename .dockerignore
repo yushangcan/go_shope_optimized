@@ -1,0 +1,8 @@
+# Docker's build context should contain source code, not local Git data or build artifacts.
+.git
+.idea
+.env
+*.exe
+*.test
+coverage.out
+tmp

@@ -10,18 +10,66 @@ This branch implements a MySQL-only monolith. It deliberately contains no Redis,
 4. Authenticated synchronous seckill ordering.
 5. Pay or cancel an order. Cancelling a pending order restores MySQL inventory in the same transaction.
 
-## Configure and run
+## Run with Docker Compose
 
-1. Create an empty MySQL database named `go_shope`.
-2. In PowerShell, set connection values for the current terminal only:
+This project now uses Docker Compose. You do **not** need to start the local Windows `MYSQL80` service.
 
 ```powershell
-$env:MYSQL_DSN='root:your_password@tcp(127.0.0.1:3306)/go_shope?charset=utf8mb4&parseTime=True&loc=Local'
-$env:JWT_SECRET='replace-with-a-long-random-secret'
-go run .
+docker compose up --build
 ```
 
-The application automatically creates the four basic tables: `users`, `products`, `seckill_activities`, and `orders`.
+Compose starts two containers:
+
+```text
+go-shope-app    Go + Gin API       http://localhost:8080
+go-shope-mysql  MySQL 8.0          localhost:3307 (optional GUI access)
+```
+
+The API waits for MySQL's health check. On first startup, GORM automatically creates the four basic tables: `users`, `products`, `seckill_activities`, and `orders`.
+
+Verify that the API is running in a second PowerShell window:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/health
+```
+
+Expected result:
+
+```json
+{"status":"ok"}
+```
+
+Stop containers while retaining database data:
+
+```powershell
+docker compose down
+```
+
+Reset the local Docker database completely (this deletes all test users, products, activities, and orders):
+
+```powershell
+docker compose down -v
+```
+
+### Why the MySQL address is `mysql:3306`
+
+The Go application runs inside its own container. From there, `127.0.0.1` means the application container itself, not the database container. Docker Compose provides an internal DNS name equal to the service name, so the Go DSN uses:
+
+```text
+tcp(mysql:3306)
+```
+
+The host mapping `3307:3306` is only for tools running on Windows, such as a database GUI. It is not used by the Go container.
+
+### Run Go directly instead of Docker
+
+If you later want to run `go run .` directly on Windows while the Docker MySQL container is up, use host port `3307`:
+
+```powershell
+$env:MYSQL_DSN='root:root123456@tcp(127.0.0.1:3307)/go_shope?charset=utf8mb4&parseTime=True&loc=Local'
+$env:JWT_SECRET='change-this-local-development-jwt-secret-2026'
+go run .
+```
 
 ## Main endpoints
 
