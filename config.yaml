@@ -1,0 +1,11 @@
+server:
+  addr: ":8080"
+
+# Do not place a real password in Git. Set MYSQL_DSN in your terminal instead.
+# Example: root:your_password@tcp(127.0.0.1:3306)/go_shope?charset=utf8mb4&parseTime=True&loc=Local
+mysql:
+  dsn: ""
+
+# Do not use this example value in a deployed environment. Set JWT_SECRET in your terminal.
+jwt:
+  secret: ""

@@ -1,17 +1,26 @@
 package main
 
 import (
-	"go_shope/model"
+	"log"
 
-	"github.com/gin-gonic/gin"
+	"go_shope/config"
+	"go_shope/dao"
+	"go_shope/router"
+	"go_shope/service"
 )
 
 func main() {
-	//导入数据库等配置文件
-
-	//启动gin路由
-	service := gin.Default()
-	u := &model.User{}
-	u.ServicerRouter(service)
-
+	cfg, err := config.Load("config.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+	repo, err := dao.New(cfg.MySQL.DSN)
+	if err != nil {
+		log.Fatal(err)
+	}
+	r := router.New(service.NewUserService(repo), service.NewProductService(repo), service.NewActivityService(repo), service.NewOrderService(repo), cfg.JWT.Secret)
+	log.Printf("server listening on %s", cfg.Server.Addr)
+	if err := r.Run(cfg.Server.Addr); err != nil {
+		log.Fatal(err)
+	}
 }

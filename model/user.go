@@ -1,19 +1,12 @@
 package model
 
-import "github.com/gin-gonic/gin"
+import "time"
 
 type User struct {
-	id    int
-	name  string
-	power string
-}
-
-func (u *User)ServicerRouter(service *gin.Engine){
-	service.POST("/login", u.Login)
-
-}
-
-
-func(u *User)Login(service *gin.Context){
-
+	ID           uint64    `gorm:"primaryKey" json:"id"`
+	Username     string    `gorm:"size:100;not null;uniqueIndex" json:"username"`
+	PasswordHash string    `gorm:"size:255;not null" json:"-"`
+	Role         string    `gorm:"size:20;not null;default:USER" json:"role"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }

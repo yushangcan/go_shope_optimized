@@ -1,0 +1,7 @@
+# Local credentials belong in environment variables, never in Git.
+.env
+
+# Go build and test artifacts.
+*.exe
+*.test
+coverage.out
