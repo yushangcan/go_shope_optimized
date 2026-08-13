@@ -1,49 +1,53 @@
-// Package config 只负责读取配置，不处理任何业务逻辑。
+// Package config loads application settings from YAML and environment variables.
 package config
 
 import (
 	"fmt"
-	"os"
 
-	"gopkg.in/yaml.v3"
+	"github.com/spf13/viper"
 )
 
-// Config 的结构要和 config.yaml 的层级保持一致。
+// Config mirrors the config.yaml hierarchy. mapstructure tags are used by
+// Viper when it maps config values into this Go struct.
 type Config struct {
-	// Server 下面的 Addr 对应 YAML 中的 server.addr。
 	Server struct {
-		Addr string `yaml:"addr"`
-	} `yaml:"server"`
-	// MySQL.DSN 是 GORM 连接 MySQL 所需的完整连接字符串。
+		Addr string `mapstructure:"addr"`
+	} `mapstructure:"server"`
 	MySQL struct {
-		DSN string `yaml:"dsn"`
-	} `yaml:"mysql"`
-	// JWT.Secret 用于签名和验证登录令牌。
+		DSN string `mapstructure:"dsn"`
+	} `mapstructure:"mysql"`
 	JWT struct {
-		Secret string `yaml:"secret"`
-	} `yaml:"jwt"`
+		Secret string `mapstructure:"secret"`
+	} `mapstructure:"jwt"`
 }
 
+// Load reads YAML first, then lets MYSQL_DSN and JWT_SECRET override YAML.
+// This means secrets can stay outside source control in Docker/PowerShell.
 func Load(path string) (Config, error) {
-	// cfg 是最终要返回的配置对象；先声明一个空对象再逐步填充。
 	var cfg Config
-	// 读取 config.yaml 的原始字节内容。
-	data, err := os.ReadFile(path)
-	if err != nil {
+
+	// A new instance prevents settings from leaking across tests or reloads.
+	v := viper.New()
+	v.SetConfigFile(path)
+	v.SetConfigType("yaml")
+
+	if err := v.ReadInConfig(); err != nil {
 		return cfg, fmt.Errorf("read config: %w", err)
 	}
-	// 把 YAML 文本按字段标签解析到 cfg 中。
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return cfg, fmt.Errorf("parse config: %w", err)
+
+	// Bind these dotted keys to the existing environment variable names.
+	// When an environment variable is set, it takes precedence over config.yaml.
+	if err := v.BindEnv("mysql.dsn", "MYSQL_DSN"); err != nil {
+		return cfg, fmt.Errorf("bind MYSQL_DSN: %w", err)
 	}
-	// 如果终端设置了 MYSQL_DSN，就覆盖 YAML 的值。
-	// 这是为了让密码只存在当前终端，不写进 Git 文件。
-	if value := os.Getenv("MYSQL_DSN"); value != "" {
-		cfg.MySQL.DSN = value
+	if err := v.BindEnv("jwt.secret", "JWT_SECRET"); err != nil {
+		return cfg, fmt.Errorf("bind JWT_SECRET: %w", err)
 	}
-	if value := os.Getenv("JWT_SECRET"); value != "" {
-		cfg.JWT.Secret = value
+
+	if err := v.Unmarshal(&cfg); err != nil {
+		return cfg, fmt.Errorf("unmarshal config: %w", err)
 	}
+
 	if cfg.Server.Addr == "" {
 		cfg.Server.Addr = ":8080"
 	}
@@ -55,8 +59,3 @@ func Load(path string) (Config, error) {
 	}
 	return cfg, nil
 }
-
-// JWT 密钥也优先从环境变量获取。
-// 没填写端口时，使用本地开发最常见的 8080。
-// 没有数据库连接串，程序无法完成 CRUD，所以立即退出并提示。
-// 没有 JWT 密钥就不能安全签发登录令牌，也不允许启动。

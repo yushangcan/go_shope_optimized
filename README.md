@@ -27,6 +27,8 @@ go-shope-mysql  MySQL 8.0          localhost:3307 (optional GUI access)
 
 The API waits for MySQL's health check. On first startup, GORM automatically creates the four basic tables: `users`, `products`, `seckill_activities`, and `orders`.
 
+Configuration is read by Viper. `config.yaml` provides defaults, while `MYSQL_DSN` and `JWT_SECRET` from Docker Compose or PowerShell override those values.
+
 Verify that the API is running in a second PowerShell window:
 
 ```powershell
