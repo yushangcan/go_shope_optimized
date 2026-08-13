@@ -7,6 +7,7 @@ import (
 	"go_shope/service"
 )
 
+// ActivityHandler 对应秒杀活动的 HTTP CRUD。
 type ActivityHandler struct{ activities *service.ActivityService }
 
 func NewActivityHandler(activities *service.ActivityService) *ActivityHandler {
@@ -19,6 +20,7 @@ func (h *ActivityHandler) Create(c *gin.Context) {
 		writeError(c, service.ErrInvalidInput)
 		return
 	}
+	// Service 会检查商品存在、商品上架、库存数量和活动时间是否合法。
 	activity, err := h.activities.Create(req)
 	if err != nil {
 		writeError(c, err)
