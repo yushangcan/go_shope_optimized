@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>云栖集市 · 好物正当时</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="storefront">
+  <div class="top-strip"><span>云栖集市 · 今日慢慢逛，惊喜刚刚好</span><a href="/admin">商家工作台</a></div>
+  <header class="store-header shell">
+    <a class="brand" href="/"><span class="brand-mark">云</span><span>云栖集市<small>YUNQI MARKET</small></span></a>
+    <label class="search-box"><span>⌕</span><input id="product-search" placeholder="搜索今日想要的好物"><button id="search-button">搜索</button></label>
+    <button class="account-button" id="account-button">登录 / 注册</button>
+  </header>
+
+  <main class="shell page-space">
+    <section class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">WARM FINDS · DAILY EDIT</p>
+        <h1>把喜欢的生活<br><em>慢慢带回家</em></h1>
+        <p>为日常挑选一份柔软心意。每一件好物，都值得被温柔地遇见。</p>
+        <a class="primary-link" href="#seckill">先逛秒杀专区 <span>→</span></a>
+        <div class="hero-tags"><span>品质精选</span><span>安心购物</span><span>限时好价</span></div>
+      </div>
+      <div class="hero-art" aria-label="柔和色彩的商品氛围插画">
+        <div class="sun"></div><div class="cloud cloud-one"></div><div class="cloud cloud-two"></div>
+        <div class="hero-card card-one"><span>✦</span><b>今日灵感</b><small>从一件喜欢开始</small></div>
+        <div class="hero-card card-two"><span>♡</span><b>温柔到家</b><small>慢享每一个日常</small></div>
+        <div class="plant"><i></i><i></i><i></i><b></b></div>
+      </div>
+    </section>
+
+    <section class="seckill-section" id="seckill">
+      <div class="section-heading light-heading"><div><p class="eyebrow">FLASH SALE</p><h2>置顶秒杀专区 <span>限时心动价</span></h2></div><div class="sale-clock"><span>距结束</span><b id="sale-countdown">加载中</b></div></div>
+      <div id="seckill-list" class="seckill-list"><p class="loading-text">正在挑选今日秒杀好物…</p></div>
+    </section>
+
+    <section class="category-row"><button>为你推荐</button><button>居家日用</button><button>数码好物</button><button>心意礼物</button><button>生活百货</button></section>
+    <section class="section-heading"><div><p class="eyebrow">CURATED FOR YOU</p><h2>今日好物推荐</h2></div><p>慢慢浏览，发现值得拥有的小美好</p></section>
+    <section id="product-list" class="product-grid"><p class="loading-text">正在加载商品…</p></section>
+  </main>
+
+  <button class="cart-float" id="orders-button"><span>♡</span><b>我的订单</b><small id="order-count">未登录</small></button>
+  <div id="auth-modal" class="modal" aria-hidden="true"><div class="modal-card"><button class="close-modal" data-close="auth-modal">×</button><p class="eyebrow">WELCOME HOME</p><h2>登录云栖集市</h2><p class="muted">没有账号？填写用户名和密码即可注册。</p><form id="auth-form"><input id="auth-username" placeholder="用户名（至少 3 位）" required><input id="auth-password" type="password" placeholder="密码（至少 6 位）" required><button class="primary-button" type="submit">登录</button><button class="text-button" id="register-button" type="button">我是新用户，创建账号</button></form></div></div>
+  <div id="orders-modal" class="modal" aria-hidden="true"><div class="modal-card order-modal-card"><button class="close-modal" data-close="orders-modal">×</button><p class="eyebrow">MY ORDERS</p><h2>我的订单</h2><div id="store-order-list" class="order-table"><p class="muted">登录后查看订单。</p></div></div></div>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

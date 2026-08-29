@@ -1,14 +1,17 @@
-# Go Shop: basic CRUD version
+# Go Shop: ordinary MySQL baseline
 
-This branch implements a MySQL-only monolith. It deliberately contains no Redis, RabbitMQ, caching, rate limiting, sharding, or distributed components.
+This repository is the ordinary comparison baseline for later load-testing and optimization work. It is a synchronous MySQL-only monolith and deliberately contains no Redis, RabbitMQ, caching, rate limiting, sharding, asynchronous order pipeline, or distributed components.
+
+The baseline still keeps correctness requirements such as password hashing, JWT authorization, database transactions, conditional stock deduction, request idempotency, and integer-cent prices. Those rules prevent invalid business data; they are not performance optimizations.
 
 ## Included business flow
 
 1. Register and log in with bcrypt password hashes and a JWT.
 2. Admin CRUD for products and seckill activities.
 3. Public product and activity queries.
-4. Authenticated synchronous seckill ordering.
+4. Authenticated synchronous ordinary-product and seckill ordering.
 5. Pay or cancel an order. Cancelling a pending order restores MySQL inventory in the same transaction.
+6. Buyer storefront and merchant dashboard served directly by Gin.
 
 ## Run with Docker Compose
 
@@ -40,6 +43,17 @@ Expected result:
 ```json
 {"status":"ok"}
 ```
+
+### Open the frontend pages
+
+After the service is running, open these addresses in a browser:
+
+| Page | Address | What it provides |
+| --- | --- | --- |
+| Buyer storefront | `http://localhost:8080/` | Product browsing, a top-of-page seckill area, login/registration, and seckill ordering |
+| Merchant dashboard | `http://localhost:8080/admin` | Product/activity CRUD and the store-wide order overview |
+
+The merchant dashboard uses the same JWT login as the buyer page. Before testing product or activity creation, change that user's `role` to `ADMIN` in MySQL; this basic project intentionally does not provide a public administrator-registration endpoint.
 
 Stop containers while retaining database data:
 
@@ -82,13 +96,43 @@ go run .
 | POST | `/api/auth/login` | Obtain a JWT |
 | GET | `/api/products` | List on-sale products |
 | GET | `/api/products/:id` | Get product detail |
+| POST | `/api/products/:id/orders` | Create an ordinary product order |
 | GET | `/api/seckill/activities` | List activities |
 | POST | `/api/seckill/activities/:id/orders` | Create one synchronous seckill order |
 | GET | `/api/orders` | List the current user's orders |
 | POST | `/api/orders/:id/pay` | Simulate payment |
 | POST | `/api/orders/:id/cancel` | Cancel a pending order and restore inventory |
 
-Product and activity write endpoints are under `/api/admin`. A newly registered user has the `USER` role. To test admin endpoints, change the required user's `role` to `ADMIN` directly in MySQL during this basic development stage.
+Product and activity write endpoints are under `/api/admin`. The admin dashboard also uses `GET /api/admin/products` and `GET /api/admin/orders` for full management lists. A newly registered user has the `USER` role. To test admin endpoints, change the required user's `role` to `ADMIN` directly in MySQL during this basic development stage.
+
+## Verification
+
+Run the code-level checks:
+
+```powershell
+go test ./...
+go vet ./...
+go build ./...
+node --check web/assets/app.js
+docker compose config
+```
+
+The MySQL-backed smoke test is opt-in because it starts a complete HTTP flow and writes temporary records. It removes those records before returning:
+
+```powershell
+$env:SHOPE_SMOKE='1'
+$env:MYSQL_DSN='root:root123456@tcp(127.0.0.1:3307)/go_shope?charset=utf8mb4&parseTime=True&loc=Local'
+$env:JWT_SECRET='change-this-local-development-jwt-secret-2026'
+go test -run TestBaselineHTTPFlow -v .
+```
+
+The flow verifies page serving, registration/login, admin product and activity creation, ordinary ordering and cancellation, seckill ordering and payment, retry idempotency, stock results, and the admin order list.
+
+## Baseline boundary for later comparison
+
+Keep benchmark results for this version separate from optimized branches. Record at least the commit hash, test data size, concurrency, request duration, success/error counts, throughput, latency percentiles, database state, and machine/container resources. Do not compare later Redis or queue results against an unrecorded or differently configured baseline.
+
+This ordinary version intentionally performs synchronous request processing and uses MySQL as its only stateful service. Future optimizations should be added on a separate branch after this baseline commit is preserved.
 
 ## Important baseline guarantees
 

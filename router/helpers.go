@@ -24,7 +24,7 @@ func writeError(c *gin.Context, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, service.ErrConflict):
 		status = http.StatusConflict
-	case errors.Is(err, service.ErrOutOfStock), errors.Is(err, service.ErrActivityUnavailable), errors.Is(err, service.ErrInvalidOrderStatus):
+	case errors.Is(err, service.ErrOutOfStock), errors.Is(err, service.ErrActivityUnavailable), errors.Is(err, service.ErrProductUnavailable), errors.Is(err, service.ErrInvalidOrderStatus):
 		status = http.StatusConflict
 	}
 	// 统一使用 {"error": "..."} 格式返回错误给客户端。

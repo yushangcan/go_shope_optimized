@@ -37,6 +37,15 @@ func (h *ProductHandler) List(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, products)
 }
+
+func (h *ProductHandler) ListAll(c *gin.Context) {
+	products, err := h.products.ListAll()
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, products)
+}
 func (h *ProductHandler) Get(c *gin.Context) {
 	id, err := pathID(c, "id")
 	if err != nil {

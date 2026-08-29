@@ -16,6 +16,16 @@ func (r *Repository) ListOnSaleProducts() ([]model.Product, error) {
 	return products, nil
 }
 
+// ListProducts returns every product for the merchant dashboard, including
+// products that are currently off sale.
+func (r *Repository) ListProducts() ([]model.Product, error) {
+	var products []model.Product
+	if err := r.DB.Order("id desc").Find(&products).Error; err != nil {
+		return nil, err
+	}
+	return products, nil
+}
+
 func (r *Repository) FindProductByID(id uint64) (*model.Product, error) {
 	var product model.Product
 	if err := r.DB.First(&product, id).Error; err != nil {

@@ -19,6 +19,44 @@ type createOrderRequest struct {
 	RequestID string `json:"request_id"`
 }
 
+// createProductOrderRequest 是普通商品下单接口接收的 JSON 请求体。
+type createProductOrderRequest struct {
+	// Quantity 是购买数量，必须大于 0。
+	Quantity int `json:"quantity"`
+	// RequestID 标识用户的一次下单动作，重复提交同一个值不会重复创建订单。
+	RequestID string `json:"request_id"`
+}
+
+// CreateProductOrder 处理 POST /api/products/:id/orders 普通商品下单请求。
+func (h *OrderHandler) CreateProductOrder(c *gin.Context) {
+	// productID 来自 URL 中的 :id，代表用户要购买的商品。
+	productID, err := pathID(c, "id")
+	if err != nil {
+		writeError(c, service.ErrInvalidInput)
+		return
+	}
+	// userID 由 JWT 中间件写入上下文，保证订单属于当前登录用户。
+	userID, err := currentUserID(c)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	// 将 JSON 中的购买数量和请求唯一 ID 绑定到请求结构体。
+	var req createProductOrderRequest
+	if c.ShouldBindJSON(&req) != nil {
+		writeError(c, service.ErrInvalidInput)
+		return
+	}
+	// Service 校验商品并调用 DAO 事务执行扣库存和创建订单。
+	order, err := h.orders.CreateProductOrder(userID, productID, req.Quantity, req.RequestID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	// 首次创建和幂等重试都返回完整订单，方便前端展示订单号。
+	c.JSON(http.StatusCreated, order)
+}
+
 func (h *OrderHandler) CreateSeckillOrder(c *gin.Context) {
 	// activityID 来自 /api/seckill/activities/:id/orders 中的 :id。
 	activityID, err := pathID(c, "id")
@@ -54,6 +92,15 @@ func (h *OrderHandler) List(c *gin.Context) {
 		return
 	}
 	orders, err := h.orders.ListByUserID(userID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, orders)
+}
+
+func (h *OrderHandler) ListAll(c *gin.Context) {
+	orders, err := h.orders.ListAll()
 	if err != nil {
 		writeError(c, err)
 		return

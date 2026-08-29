@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>云栖集市 · 商家工作台</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="admin-body">
+  <header class="admin-top"><a class="brand" href="/"><span class="brand-mark">云</span><span>云栖集市<small>MERCHANT STUDIO</small></span></a><div class="top-actions"><span class="status-dot">店铺营业中</span><button id="admin-login-button">管理员登录</button></div></header>
+  <div class="admin-layout">
+    <aside class="admin-sidebar"><div class="profile-blurb"><span class="avatar">管</span><div><b id="admin-name">管理员</b><small>云栖集市商家端</small></div></div><nav><a class="active" href="#dashboard">⌂ 工作台</a><a href="#product-panel">▣ 商品管理</a><a href="#activity-panel">◷ 秒杀活动</a><a href="#orders-panel">▤ 订单管理</a></nav><a class="back-store" href="/">← 返回买家首页</a></aside>
+    <main class="admin-main" id="dashboard">
+      <div class="admin-welcome"><div><p class="eyebrow">DASHBOARD</p><h1>早上好，<span id="admin-welcome">管理员</span></h1><p>今天也一起把好商品带给更多人吧。</p></div><div class="date-pill" id="today-date"></div></div>
+      <section class="metrics-grid"><article><span>￥</span><p>已支付销售额</p><b id="metric-sales">￥ 0.00</b><small>基础版按已支付订单计算</small></article><article><span>▤</span><p>全部订单</p><b id="metric-orders">0</b><small>登录后查看真实订单</small></article><article><span>⌁</span><p>秒杀活动</p><b id="metric-activities">0</b><small>正在展示的活动数量</small></article><article><span>◌</span><p>在售商品</p><b id="metric-products">0</b><small>当前公开可浏览商品</small></article></section>
+      <section class="admin-card quick-card"><div class="card-title"><div><p class="eyebrow">QUICK ACTION</p><h2>快捷操作</h2></div><span>把今天的好物安排起来</span></div><div class="quick-actions"><button data-scroll="product-panel"><i>＋</i>新增商品</button><button data-scroll="activity-panel"><i>◷</i>创建秒杀</button><button data-scroll="orders-panel"><i>▤</i>查看订单</button></div></section>
+      <section class="admin-grid">
+        <article class="admin-card" id="product-panel"><div class="card-title"><div><p class="eyebrow">PRODUCTS</p><h2>商品管理</h2></div><button class="outline-button" id="show-product-form">新增商品</button></div><form id="product-form" class="inline-form hidden"><input name="id" type="hidden"><input name="name" placeholder="商品名称" required><input name="price" type="number" min="0" placeholder="价格（分）" required><input name="stock" type="number" min="0" placeholder="库存" required><input name="description" placeholder="商品描述"><select name="status"><option value="ON_SALE">上架</option><option value="OFF_SALE">下架</option></select><button class="primary-button">保存商品</button></form><div id="admin-product-list" class="admin-list"><p class="loading-text">正在读取商品…</p></div></article>
+        <article class="admin-card" id="activity-panel"><div class="card-title"><div><p class="eyebrow">FLASH EVENTS</p><h2>秒杀活动</h2></div><button class="outline-button" id="show-activity-form">创建活动</button></div><form id="activity-form" class="inline-form hidden"><input name="id" type="hidden"><select name="product_id" id="activity-product" required><option value="">选择商品</option></select><input name="seckill_price" type="number" min="0" placeholder="秒杀价（分）" required><input name="total_stock" type="number" min="1" placeholder="活动库存" required><input name="start_time" type="datetime-local" required><input name="end_time" type="datetime-local" required><select name="status"><option value="ACTIVE">进行中</option><option value="NOT_STARTED">未开始</option><option value="ENDED">已结束</option></select><button class="primary-button">保存活动</button></form><div id="admin-activity-list" class="admin-list"><p class="loading-text">正在读取活动…</p></div></article>
+      </section>
+      <section class="admin-card" id="orders-panel"><div class="card-title"><div><p class="eyebrow">ORDERS</p><h2>全店订单概览</h2></div><button class="outline-button" id="refresh-orders">刷新</button></div><div id="admin-order-list" class="order-table"><p class="muted">登录管理员后，可以在这里查看全店订单。</p></div></section>
+    </main>
+  </div>
+  <div id="admin-auth-modal" class="modal" aria-hidden="true"><div class="modal-card"><button class="close-modal" data-close="admin-auth-modal">×</button><p class="eyebrow">MERCHANT LOGIN</p><h2>登录商家工作台</h2><p class="muted">请使用数据库中角色为 ADMIN 的账号。</p><form id="admin-auth-form"><input id="admin-username" placeholder="管理员用户名" required><input id="admin-password" type="password" placeholder="密码" required><button class="primary-button" type="submit">进入工作台</button></form></div></div>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

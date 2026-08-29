@@ -19,6 +19,8 @@ WORKDIR /app
 
 COPY --from=builder /go_shope /app/go_shope
 COPY config.yaml /app/config.yaml
+# The Gin routes serve the buyer and merchant pages directly from this folder.
+COPY web /app/web
 
 EXPOSE 8080
 
