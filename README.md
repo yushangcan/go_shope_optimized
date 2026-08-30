@@ -168,3 +168,5 @@ docker compose -f compose.optimized.yaml up --build -d
 - 最终订单结果必须通过 `GET /api/seckill/requests/:request_id` 查询并结合 MySQL 核对；不能用受理 202 代替成功率。
 
 统一压测入口见 [`benchmark/README.md`](benchmark/README.md)。结果目录只接收真实 k6 输出，严禁把模板阈值或示例值写成简历指标。
+
+详细的架构、核心流程、幂等和防超卖设计见 [`docs/PROJECT-INTRODUCTION.md`](docs/PROJECT-INTRODUCTION.md)。
