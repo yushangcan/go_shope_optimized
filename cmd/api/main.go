@@ -32,6 +32,15 @@ func main() {
 	}
 	store := redisstore.New(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.Stream, cfg.Redis.DB)
 	optimizedService := optimized.New(repo, store)
+	// Warm Redis from MySQL on startup so a single-machine Redis restart does
+	// not leave existing activities unavailable to the admission script.
+	if activities, listErr := repo.ListActivities(); listErr == nil {
+		for i := range activities {
+			if err := optimizedService.PublishActivity(context.Background(), &activities[i]); err != nil {
+				log.Printf("publish activity %d to redis: %v", activities[i].ID, err)
+			}
+		}
+	}
 
 	gin.SetMode(gin.ReleaseMode)
 	r := router.New(service.NewUserService(repo), service.NewProductService(repo), service.NewActivityService(repo), service.NewOrderService(repo), cfg.JWT.Secret)
