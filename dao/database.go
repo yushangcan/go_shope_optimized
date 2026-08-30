@@ -3,6 +3,7 @@ package dao
 
 import (
 	"fmt"
+	"time"
 
 	"go_shope/model"
 	"gorm.io/driver/mysql"
@@ -19,6 +20,13 @@ func New(dsn string) (*Repository, error) {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("connect mysql: %w", err)
+	}
+	// Keep the single-machine benchmark from creating an unbounded number of
+	// MySQL sessions while still allowing concurrent workers to make progress.
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(64)
+		sqlDB.SetMaxIdleConns(16)
+		sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	}
 
 	// AutoMigrate 根据结构体和 gorm 标签创建或补充表、索引。

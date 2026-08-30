@@ -144,13 +144,13 @@ This ordinary version intentionally performs synchronous request processing and 
 - Cancelling a pending order and restoring both MySQL stock counters occurs in one transaction.
 # Go Shope：高并发秒杀对比版
 
-这是普通同步 MySQL 版本 `go_shope` 的独立优化版本，用于同一套场景的压测对比。普通基线保持在 `baseline-v1.0.0`（commit `1a85a43`）；本仓库只承载优化实现，不修改基线项目。
+这是普通同步 MySQL 版本 `go_shope` 的独立优化版本，用于同一套场景的单机压测对比。普通基线保持在 `baseline-v1.0.0`（commit `1a85a43`）；本仓库只承载优化实现，不修改基线项目。
 
 ## 已实现的链路
 
 请求进入 API 后，由 Redis Lua 在一个原子脚本内完成活动窗口、一人一单、request_id 幂等、预扣库存、写入用户集合和 Redis Stream。API 返回 `202 Accepted` 只表示受理成功。两个 Worker 通过 Consumer Group 消费 Stream，调用原有 MySQL 事务创建订单；MySQL 唯一索引和事务是最终持久化兜底。失败时 Worker 标记 `FAILED` 并用 Lua 回补 Redis 库存和用户集合，重复投递则按 request_id 查找已有订单。
 
-API 与 Worker 是独立进程，可分别扩容。API 暴露 `/livez`、`/readyz`、`/metrics`，并配置请求超时和 SIGTERM 优雅停机；Nginx 将请求分发到两个 API 实例，Prometheus 抓取指标。
+API 与 Worker 是同一台机器上的两个进程。API 暴露 `/livez`、`/readyz`、`/metrics`，并配置请求超时和 SIGTERM 优雅停机；Prometheus 抓取本机 API 指标。
 
 ## 启动
 
@@ -158,12 +158,12 @@ API 与 Worker 是独立进程，可分别扩容。API 暴露 `/livez`、`/ready
 docker compose -f compose.optimized.yaml up --build -d
 ```
 
-默认入口为 `http://localhost:8081`。容器内 API/Worker 使用 `cmd/api` 和 `cmd/worker`，本地开发也可分别运行 `go run ./cmd/api`、`go run ./cmd/worker`。
+默认入口为 `http://localhost:8081`。Compose 只启动一个 API、一个 Worker、Redis、MySQL 和 Prometheus，适合在一台开发机上压测。容器内 API/Worker 使用 `cmd/api` 和 `cmd/worker`，本地开发也可分别运行 `go run ./cmd/api`、`go run ./cmd/worker`。
 
 ## 当前边界
 
 - 本阶段只准备代码、配置和压测入口，尚未执行正式压测、故障演练或填写任何性能数据。
-- Compose 使用单 Redis、单 MySQL，属于可运行的对比环境，不等同生产级高可用；Sentinel 仅提供配置模板。
+- Compose 使用单 Redis、单 MySQL，目标是单机可压测，不讨论分布式高可用；Sentinel/Nginx 文件仅作为后续扩展资料，不属于当前运行链路。
 - 活动创建后需调用管理端 publish 接口把活动预热到 Redis，`benchmark/scripts/prepare-optimized.ps1` 已自动完成。
 - 最终订单结果必须通过 `GET /api/seckill/requests/:request_id` 查询并结合 MySQL 核对；不能用受理 202 代替成功率。
 
