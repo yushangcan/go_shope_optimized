@@ -20,10 +20,11 @@ type OrderEvent struct {
 }
 
 type Publisher struct {
-	conn  *amqp.Connection
-	ch    *amqp.Channel
-	queue string
-	mu    sync.Mutex
+	conn     *amqp.Connection
+	ch       *amqp.Channel
+	queue    string
+	confirms chan amqp.Confirmation
+	mu       sync.Mutex
 }
 
 func New(url, queue string) (*Publisher, error) {
@@ -46,7 +47,7 @@ func New(url, queue string) (*Publisher, error) {
 		conn.Close()
 		return nil, fmt.Errorf("enable publisher confirms: %w", err)
 	}
-	return &Publisher{conn: conn, ch: ch, queue: queue}, nil
+	return &Publisher{conn: conn, ch: ch, queue: queue, confirms: ch.NotifyPublish(make(chan amqp.Confirmation, 1))}, nil
 }
 
 func (p *Publisher) Publish(ctx context.Context, event OrderEvent) error {
@@ -59,12 +60,11 @@ func (p *Publisher) Publish(ctx context.Context, event OrderEvent) error {
 	if p.conn.IsClosed() {
 		return ErrUnavailable
 	}
-	confirms := p.ch.NotifyPublish(make(chan amqp.Confirmation, 1))
 	if err := p.ch.PublishWithContext(ctx, "", p.queue, false, false, amqp.Publishing{ContentType: "application/json", DeliveryMode: amqp.Persistent, Timestamp: time.Now(), Body: body}); err != nil {
 		return fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	select {
-	case confirmation := <-confirms:
+	case confirmation := <-p.confirms:
 		if !confirmation.Ack {
 			return fmt.Errorf("%w: broker rejected message", ErrUnavailable)
 		}
