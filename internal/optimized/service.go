@@ -56,6 +56,8 @@ func (s *Service) Admit(ctx context.Context, userID, activityID uint64, requestI
 	case 0, 1:
 		if code == 0 {
 			if s.publisher == nil {
+				_ = s.store.Compensate(ctx, redisstore.OrderEvent{RequestID: requestID, UserID: userID, ActivityID: activityID}, ErrMQUnavailable.Error())
+				_ = s.store.Mark(ctx, requestID, RequestFailed, map[string]any{"reason": ErrMQUnavailable.Error()})
 				return result, ErrMQUnavailable
 			}
 			event := mq.OrderEvent{RequestID: requestID, UserID: userID, ActivityID: activityID}
