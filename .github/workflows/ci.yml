@@ -1,4 +1,4 @@
-name: baseline-ci
+name: optimized-ci
 
 on:
   push:
@@ -40,9 +40,9 @@ jobs:
           go vet ./...
           go build ./...
           node --check web/assets/app.js
-          docker compose config --quiet
+          docker compose -f compose.optimized.yaml config --quiet
 
-      - name: MySQL-backed baseline smoke test
+      - name: MySQL-backed regression smoke test
         env:
           SHOPE_SMOKE: "1"
           MYSQL_DSN: root:root123456@tcp(127.0.0.1:3306)/go_shope?charset=utf8mb4&parseTime=True&loc=UTC

@@ -163,7 +163,7 @@ docker compose -f compose.optimized.yaml up --build -d
 ## 当前边界
 
 - 本阶段只准备代码、配置和压测入口，尚未执行正式压测、故障演练或填写任何性能数据。
-- Compose 使用单 Redis、单 MySQL，目标是单机可压测，不讨论分布式高可用；Sentinel/Nginx 文件仅作为后续扩展资料，不属于当前运行链路。
+- Compose 使用单 Redis、单 MySQL、单 API 和单 Worker，目标是单机可压测，不讨论分布式高可用。
 - 活动创建后需调用管理端 publish 接口把活动预热到 Redis，`benchmark/scripts/prepare-optimized.ps1` 已自动完成。
 - 最终订单结果必须通过 `GET /api/seckill/requests/:request_id` 查询并结合 MySQL 核对；不能用受理 202 代替成功率。
 
