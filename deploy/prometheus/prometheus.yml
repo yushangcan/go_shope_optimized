@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: optimized-api
+    static_configs:
+      - targets: ["nginx:8080"]
+    metrics_path: /metrics

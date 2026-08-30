@@ -19,6 +19,12 @@ type Config struct {
 	JWT struct {
 		Secret string `mapstructure:"secret"`
 	} `mapstructure:"jwt"`
+	Redis struct {
+		Addr     string `mapstructure:"addr"`
+		Password string `mapstructure:"password"`
+		DB       int    `mapstructure:"db"`
+		Stream   string `mapstructure:"stream"`
+	} `mapstructure:"redis"`
 }
 
 // Load reads YAML first, then lets MYSQL_DSN and JWT_SECRET override YAML.
@@ -43,6 +49,15 @@ func Load(path string) (Config, error) {
 	if err := v.BindEnv("jwt.secret", "JWT_SECRET"); err != nil {
 		return cfg, fmt.Errorf("bind JWT_SECRET: %w", err)
 	}
+	if err := v.BindEnv("redis.addr", "REDIS_ADDR"); err != nil {
+		return cfg, fmt.Errorf("bind REDIS_ADDR: %w", err)
+	}
+	if err := v.BindEnv("redis.password", "REDIS_PASSWORD"); err != nil {
+		return cfg, fmt.Errorf("bind REDIS_PASSWORD: %w", err)
+	}
+	if err := v.BindEnv("redis.stream", "REDIS_STREAM"); err != nil {
+		return cfg, fmt.Errorf("bind REDIS_STREAM: %w", err)
+	}
 
 	if err := v.Unmarshal(&cfg); err != nil {
 		return cfg, fmt.Errorf("unmarshal config: %w", err)
@@ -56,6 +71,12 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.JWT.Secret == "" {
 		return cfg, fmt.Errorf("JWT_SECRET is required")
+	}
+	if cfg.Redis.Addr == "" {
+		cfg.Redis.Addr = "127.0.0.1:6379"
+	}
+	if cfg.Redis.Stream == "" {
+		cfg.Redis.Stream = "seckill:stream:orders"
 	}
 	return cfg, nil
 }

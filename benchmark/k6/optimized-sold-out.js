@@ -1,0 +1,5 @@
+import http from 'k6/http'; import { check } from 'k6';
+const baseURL = __ENV.BASE_URL || 'http://localhost:8081'; const activityID = __ENV.ACTIVITY_ID || '1'; const password = __ENV.K6_PASSWORD || 'optimized-load-password';
+export const options = { vus: Number(__ENV.K6_VUS || 100), duration: __ENV.K6_DURATION || '30s' };
+let token = '';
+export default function () { if (!token) { const u = `opt_sold_${__VU}_${Date.now()}`; const h = { headers: { 'Content-Type': 'application/json' } }; http.post(`${baseURL}/api/auth/register`, JSON.stringify({ username: u, password }), h); const l = http.post(`${baseURL}/api/auth/login`, JSON.stringify({ username: u, password }), h); if (l.status !== 200) return; token = l.json('token'); } const r = http.post(`${baseURL}/api/seckill/activities/${activityID}/requests`, JSON.stringify({ request_id: `k6-sold-${__VU}-${__ITER}-${Date.now()}` }), { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, tags: { scenario: 'optimized_sold_out' } }); check(r, { 'business response': x => [202, 409, 503].includes(x.status) }); }

@@ -9,3 +9,9 @@ mysql:
 # Do not use this example value in a deployed environment. Set JWT_SECRET in your terminal.
 jwt:
   secret: ""
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+  stream: "seckill:stream:orders"
