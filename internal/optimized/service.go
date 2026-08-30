@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go_shope/dao"
+	"go_shope/internal/mq"
 	"go_shope/internal/observability"
 	"go_shope/internal/redisstore"
 	"go_shope/model"
@@ -19,6 +20,7 @@ var (
 	ErrActivityInactive = errors.New("activity inactive")
 	ErrRequestFailed    = errors.New("request failed")
 	ErrRequestConflict  = errors.New("request id belongs to another user")
+	ErrMQUnavailable    = errors.New("message queue unavailable")
 )
 
 const (
@@ -29,12 +31,13 @@ const (
 )
 
 type Service struct {
-	repo  *dao.Repository
-	store *redisstore.Store
+	repo      *dao.Repository
+	store     *redisstore.Store
+	publisher *mq.Publisher
 }
 
-func New(repo *dao.Repository, store *redisstore.Store) *Service {
-	return &Service{repo: repo, store: store}
+func New(repo *dao.Repository, store *redisstore.Store, publisher *mq.Publisher) *Service {
+	return &Service{repo: repo, store: store, publisher: publisher}
 }
 
 type Admission struct {
@@ -51,6 +54,17 @@ func (s *Service) Admit(ctx context.Context, userID, activityID uint64, requestI
 	result := Admission{RequestID: requestID, Status: status, ActivityID: activityID}
 	switch code {
 	case 0, 1:
+		if code == 0 {
+			if s.publisher == nil {
+				return result, ErrMQUnavailable
+			}
+			event := mq.OrderEvent{RequestID: requestID, UserID: userID, ActivityID: activityID}
+			if err := s.publisher.Publish(ctx, event); err != nil {
+				_ = s.store.Compensate(ctx, redisstore.OrderEvent{RequestID: requestID, UserID: userID, ActivityID: activityID}, err.Error())
+				_ = s.store.Mark(ctx, requestID, RequestFailed, map[string]any{"reason": err.Error()})
+				return result, fmt.Errorf("%w: %v", ErrMQUnavailable, err)
+			}
+		}
 		observability.Admissions.WithLabelValues(status).Inc()
 		return result, nil
 	case 2:
@@ -87,7 +101,7 @@ func (s *Service) RequestStatus(ctx context.Context, requestID string) (map[stri
 }
 
 func (s *Service) ProcessEvent(ctx context.Context, event redisstore.OrderEvent) error {
-	// A redelivered stream entry may already have a durable order. Treat it as
+	// A redelivered MQ message may already have a durable order. Treat it as
 	// success so compensation never returns inventory for an existing order.
 	if existing, err := s.repo.FindOrderByRequestID(event.RequestID); err == nil && existing != nil {
 		return s.store.Mark(ctx, event.RequestID, RequestSucceeded, map[string]any{"order_id": existing.ID})

@@ -23,8 +23,11 @@ type Config struct {
 		Addr     string `mapstructure:"addr"`
 		Password string `mapstructure:"password"`
 		DB       int    `mapstructure:"db"`
-		Stream   string `mapstructure:"stream"`
 	} `mapstructure:"redis"`
+	MQ struct {
+		URL   string `mapstructure:"url"`
+		Queue string `mapstructure:"queue"`
+	} `mapstructure:"mq"`
 }
 
 // Load reads YAML first, then lets MYSQL_DSN and JWT_SECRET override YAML.
@@ -55,8 +58,11 @@ func Load(path string) (Config, error) {
 	if err := v.BindEnv("redis.password", "REDIS_PASSWORD"); err != nil {
 		return cfg, fmt.Errorf("bind REDIS_PASSWORD: %w", err)
 	}
-	if err := v.BindEnv("redis.stream", "REDIS_STREAM"); err != nil {
-		return cfg, fmt.Errorf("bind REDIS_STREAM: %w", err)
+	if err := v.BindEnv("mq.url", "MQ_URL"); err != nil {
+		return cfg, fmt.Errorf("bind MQ_URL: %w", err)
+	}
+	if err := v.BindEnv("mq.queue", "MQ_QUEUE"); err != nil {
+		return cfg, fmt.Errorf("bind MQ_QUEUE: %w", err)
 	}
 
 	if err := v.Unmarshal(&cfg); err != nil {
@@ -75,8 +81,11 @@ func Load(path string) (Config, error) {
 	if cfg.Redis.Addr == "" {
 		cfg.Redis.Addr = "127.0.0.1:6379"
 	}
-	if cfg.Redis.Stream == "" {
-		cfg.Redis.Stream = "seckill:stream:orders"
+	if cfg.MQ.URL == "" {
+		cfg.MQ.URL = "amqp://seckill:seckillpass@127.0.0.1:5672/"
+	}
+	if cfg.MQ.Queue == "" {
+		cfg.MQ.Queue = "seckill.orders"
 	}
 	return cfg, nil
 }

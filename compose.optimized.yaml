@@ -25,6 +25,22 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: seckill
+      RABBITMQ_DEFAULT_PASS: seckillpass
+    volumes:
+      - optimized_rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
   api:
     build: { context: ., dockerfile: Dockerfile }
     command: ["/app/api"]
@@ -32,11 +48,13 @@ services:
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
     environment: &app-env
       MYSQL_DSN: "root:root123456@tcp(mysql:3306)/go_shope?charset=utf8mb4&parseTime=True&loc=Local"
       JWT_SECRET: "change-this-local-development-jwt-secret-2026"
       REDIS_ADDR: "redis:6379"
-      REDIS_STREAM: "seckill:stream:orders"
+      MQ_URL: "amqp://seckill:seckillpass@rabbitmq:5672/"
+      MQ_QUEUE: "seckill.orders"
     ports: ["8081:8080"]
   worker:
     build: { context: ., dockerfile: Dockerfile }
@@ -45,6 +63,7 @@ services:
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
     environment:
       <<: *app-env
       WORKER_NAME: worker-single
@@ -58,3 +77,4 @@ services:
 volumes:
   optimized_mysql_data:
   optimized_redis_data:
+  optimized_rabbitmq_data:

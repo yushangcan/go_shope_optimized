@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"go_shope/internal/mq"
 	"go_shope/internal/redisstore"
 	"go_shope/middleware"
 	"net/http"
@@ -35,7 +36,7 @@ func (h *Handler) Admit(c *gin.Context) {
 	result, err := h.service.Admit(c, userID, activityID, strings.TrimSpace(request.RequestID))
 	if err != nil {
 		status := http.StatusConflict
-		if errors.Is(err, redisstore.ErrUnavailable) {
+		if errors.Is(err, redisstore.ErrUnavailable) || errors.Is(err, mq.ErrUnavailable) || errors.Is(err, ErrMQUnavailable) {
 			status = http.StatusServiceUnavailable
 		}
 		c.JSON(status, gin.H{"error": err.Error(), "request_id": result.RequestID, "status": result.Status})

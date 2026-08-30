@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go_shope/config"
 	"go_shope/dao"
+	"go_shope/internal/mq"
 	"go_shope/internal/observability"
 	"go_shope/internal/optimized"
 	"go_shope/internal/redisstore"
@@ -30,8 +31,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	store := redisstore.New(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.Stream, cfg.Redis.DB)
-	optimizedService := optimized.New(repo, store)
+	store := redisstore.New(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB)
+	publisher, err := mq.New(cfg.MQ.URL, cfg.MQ.Queue)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer publisher.Close()
+	optimizedService := optimized.New(repo, store, publisher)
 	// Warm Redis from MySQL on startup so a single-machine Redis restart does
 	// not leave existing activities unavailable to the admission script.
 	if activities, listErr := repo.ListActivities(); listErr == nil {

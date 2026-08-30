@@ -2,7 +2,6 @@ package redisstore
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -18,7 +17,6 @@ const admissionScript = `
 local req = KEYS[1]
 local buyer = KEYS[2]
 local activity = KEYS[3]
-local stream = KEYS[4]
 local request_id = ARGV[1]
 local user_id = ARGV[2]
 local activity_id = ARGV[3]
@@ -40,23 +38,20 @@ redis.call('HINCRBY', activity, 'stock', -1)
 redis.call('SADD', buyer, user_id)
 redis.call('HSET', req, 'status', 'ACCEPTED', 'user_id', user_id, 'activity_id', activity_id, 'updated_at', now)
 redis.call('EXPIRE', req, 86400)
-redis.call('XADD', stream, '*', 'request_id', request_id, 'user_id', user_id, 'activity_id', activity_id)
 return {0, 'ACCEPTED'}`
 
 type OrderEvent struct {
 	RequestID  string `json:"request_id"`
 	UserID     uint64 `json:"user_id"`
 	ActivityID uint64 `json:"activity_id"`
-	StreamID   string `json:"stream_id"`
 }
 
 type Store struct {
 	Client *redis.Client
-	Stream string
 }
 
-func New(addr, password, stream string, db int) *Store {
-	return &Store{Client: redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db, DialTimeout: 2 * time.Second, ReadTimeout: 2 * time.Second, WriteTimeout: 2 * time.Second, PoolSize: 32}), Stream: stream}
+func New(addr, password string, db int) *Store {
+	return &Store{Client: redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db, DialTimeout: 2 * time.Second, ReadTimeout: 2 * time.Second, WriteTimeout: 2 * time.Second, PoolSize: 32})}
 }
 
 func (s *Store) Ping(ctx context.Context) error {
@@ -72,7 +67,7 @@ func (s *Store) PublishActivity(ctx context.Context, activityID uint64, status s
 }
 
 func (s *Store) Admit(ctx context.Context, activityID, userID uint64, requestID string, now time.Time) (int, string, error) {
-	result, err := s.Client.Eval(ctx, admissionScript, []string{fmt.Sprintf("seckill:request:%s", requestID), fmt.Sprintf("seckill:buyers:%d", activityID), fmt.Sprintf("seckill:activity:%d", activityID), s.Stream}, requestID, strconv.FormatUint(userID, 10), strconv.FormatUint(activityID, 10), now.Unix()).Result()
+	result, err := s.Client.Eval(ctx, admissionScript, []string{fmt.Sprintf("seckill:request:%s", requestID), fmt.Sprintf("seckill:buyers:%d", activityID), fmt.Sprintf("seckill:activity:%d", activityID)}, requestID, strconv.FormatUint(userID, 10), strconv.FormatUint(activityID, 10), now.Unix()).Result()
 	if err != nil {
 		return -1, "", fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
@@ -92,52 +87,6 @@ func (s *Store) RequestStatus(ctx context.Context, requestID string) (map[string
 	return s.Client.HGetAll(ctx, fmt.Sprintf("seckill:request:%s", requestID)).Result()
 }
 
-func (s *Store) EnsureGroup(ctx context.Context, group string) error {
-	err := s.Client.XGroupCreateMkStream(ctx, s.Stream, group, "0").Err()
-	if err != nil && !stringsContains(err.Error(), "BUSYGROUP") {
-		return err
-	}
-	return nil
-}
-
-func stringsContains(value, part string) bool {
-	return len(value) >= len(part) && (value == part || contains(value, part))
-}
-func contains(value, part string) bool {
-	for i := 0; i+len(part) <= len(value); i++ {
-		if value[i:i+len(part)] == part {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Store) Read(ctx context.Context, group, consumer string, count int, block time.Duration) ([]OrderEvent, error) {
-	entries, err := s.Client.XReadGroup(ctx, &redis.XReadGroupArgs{Group: group, Consumer: consumer, Streams: []string{s.Stream, ">"}, Count: int64(count), Block: block, NoAck: false}).Result()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
-	}
-	var events []OrderEvent
-	for _, stream := range entries {
-		for _, message := range stream.Messages {
-			var event OrderEvent
-			event.StreamID = message.ID
-			event.RequestID, _ = message.Values["request_id"].(string)
-			event.UserID, _ = parseUint(message.Values["user_id"])
-			event.ActivityID, _ = parseUint(message.Values["activity_id"])
-			events = append(events, event)
-		}
-	}
-	return events, nil
-}
-
-func parseUint(value any) (uint64, error) { return strconv.ParseUint(fmt.Sprint(value), 10, 64) }
-func (s *Store) Ack(ctx context.Context, group, streamID string) error {
-	return s.Client.XAck(ctx, s.Stream, group, streamID).Err()
-}
 func (s *Store) Mark(ctx context.Context, requestID, status string, fields map[string]any) error {
 	if fields == nil {
 		fields = make(map[string]any)
@@ -153,4 +102,3 @@ func (s *Store) Compensate(ctx context.Context, event OrderEvent, reason string)
 	script := `local current=redis.call('HGET',KEYS[1],'status'); if current=='SUCCEEDED' or current=='FAILED' then return 0 end; redis.call('HINCRBY',KEYS[2],'stock',1); redis.call('SREM',KEYS[3],ARGV[1]); redis.call('HSET',KEYS[1],'status','FAILED','reason',ARGV[2]); return 1`
 	return s.Client.Eval(ctx, script, []string{key, activity, buyer}, strconv.FormatUint(event.UserID, 10), reason).Err()
 }
-func EncodeEvent(event OrderEvent) string { data, _ := json.Marshal(event); return string(data) }

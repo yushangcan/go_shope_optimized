@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 	"os/signal"
 	"syscall"
 
 	"go_shope/config"
 	"go_shope/dao"
+	"go_shope/internal/mq"
 	"go_shope/internal/optimized"
 	"go_shope/internal/redisstore"
 )
@@ -22,11 +22,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	store := redisstore.New(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.Stream, cfg.Redis.DB)
-	w := &optimized.Worker{Service: optimized.New(repo, store), Store: store, Group: "seckill-workers", Name: os.Getenv("WORKER_NAME")}
-	if w.Name == "" {
-		w.Name = "worker-1"
+	store := redisstore.New(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB)
+	consumer, err := mq.NewConsumer(cfg.MQ.URL, cfg.MQ.Queue, 10)
+	if err != nil {
+		log.Fatal(err)
 	}
+	defer consumer.Close()
+	w := &optimized.Worker{Service: optimized.New(repo, store, nil), Store: store, Consumer: consumer}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if err := w.Run(ctx); err != nil && ctx.Err() == nil {

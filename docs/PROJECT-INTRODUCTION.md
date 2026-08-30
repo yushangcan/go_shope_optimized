@@ -9,7 +9,7 @@ Go Shope 是一个基于 Go 实现的电商秒杀示例项目。本项目包含�
 - 高并发请求下的库存安全控制；
 - 基于 `request_id` 的接口幂等；
 - Redis Lua 脚本保证多个检查和扣库存操作的原子性；
-- Redis Stream 将快速受理和慢速落库解耦；
+- RabbitMQ 将快速受理和慢速落库解耦；
 - Worker 异步创建订单；
 - MySQL 事务作为最终数据一致性保障；
 - 失败场景下的库存补偿和状态记录；
@@ -31,7 +31,7 @@ Go Shope 是一个基于 Go 实现的电商秒杀示例项目。本项目包含�
 本项目没有简单地增加缓存，而是把“快速判断和受理”和“最终持久化”拆成两个阶段：
 
 - Redis 负责高并发入口的原子校验和预扣库存；
-- Redis Stream 负责保存待处理订单事件；
+- RabbitMQ 持久化队列负责保存待处理订单事件；
 - Worker 负责调用原有 MySQL 事务完成最终订单创建；
 - 失败时执行补偿，恢复 Redis 中的预扣状态。
 
@@ -45,7 +45,7 @@ Go Shope 是一个基于 Go 实现的电商秒杀示例项目。本项目包含�
 | 关系数据库 | MySQL 8.0 | 用户、商品、活动、订单最终持久化 |
 | 高并发入口 | Redis 7 | 活动状态、预扣库存、用户购买集合和请求状态 |
 | 原子逻辑 | Redis Lua | 一次完成幂等、一人一单、库存扣减和事件投递 |
-| 异步队列 | Redis Streams | 保存待落库的秒杀订单事件 |
+| 消息队列 | RabbitMQ | 持久化保存待落库的秒杀订单事件 |
 | 监控 | Prometheus client | HTTP、受理结果和 Worker 结果指标 |
 | 鉴权 | JWT、bcrypt | 登录身份验证和密码安全存储 |
 | 压测 | k6 | 受理、只读、重复请求和售罄场景压测 |
@@ -69,7 +69,7 @@ Go Shope 是一个基于 Go 实现的电商秒杀示例项目。本项目包含�
                  +---------+   +-------------------+
                                       |
                                       v
-                              Redis Stream
+                              RabbitMQ Queue
                                       |
                                       v
                               +---------------+
@@ -108,7 +108,7 @@ seckill:request:{request_id}     Hash
   order_id                       最终订单 ID（成功后写入）
   reason                         失败原因（失败后写入）
 
-seckill:stream:orders            Stream
+seckill.orders                   Durable Queue
   request_id
   user_id
   activity_id
@@ -136,7 +136,7 @@ Content-Type: application/json
 6. 原子扣减 Redis 库存；
 7. 将用户加入已购买集合；
 8. 写入 `ACCEPTED` 请求状态；
-9. 将订单事件写入 Redis Stream。
+9. 将订单事件发布到 RabbitMQ 持久化队列。
 
 上述操作在同一个 Lua 脚本中完成。即使多个请求同时到达，也不会在“检查库存”和“扣减库存”之间被其他请求插入，从而避免 Redis 层面的超卖和重复受理。
 
@@ -154,7 +154,7 @@ HTTP 状态码为 `202 Accepted`。这表示请求已经进入异步处理链路
 
 ### 5.3 Worker 异步落库
 
-Worker 启动后创建或复用 Redis Stream Consumer Group，持续读取订单事件：
+Worker 启动后连接 RabbitMQ 持久化队列，使用手动 ACK 持续读取订单事件：
 
 1. 将请求状态更新为 `PROCESSING`；
 2. 根据活动 ID 查询活动和商品快照；
@@ -163,7 +163,7 @@ Worker 启动后创建或复用 Redis Stream Consumer Group，持续读取订单
 5. 事务内条件扣减商品总库存；
 6. 两次扣减都成功后插入订单；
 7. 将请求状态更新为 `SUCCEEDED` 并记录订单 ID；
-8. ACK Stream 消息。
+8. ACK RabbitMQ 消息。
 
 MySQL 事务中的库存扣减使用条件更新，例如：
 
@@ -181,7 +181,7 @@ WHERE id = ? AND available_stock > 0;
 
 客户端每次业务尝试生成唯一 `request_id`，并在网络超时或用户重复点击时复用该 ID。Redis Lua 先查询请求状态：
 
-- 原用户重复提交：返回原请求状态，不再次扣库存、不再次写入 Stream；
+- 原用户重复提交：返回原请求状态，不再次扣库存、不再次发布 MQ 消息；
 - 其他用户使用同一 ID：返回 `REQUEST_ID_CONFLICT`，防止跨用户篡改请求；
 - 请求不存在：执行一次新的受理流程。
 
@@ -200,7 +200,7 @@ Redis 负责快速挡住大多数重复请求，MySQL 唯一索引负责最终�
 
 ### 第一层：Redis Lua 预扣
 
-高并发请求首先竞争 Redis 中的活动库存。库存判断、扣减、用户集合写入和 Stream 投递在一个 Lua 脚本内执行，避免并发交错导致库存变负。
+高并发请求首先竞争 Redis 中的活动库存。库存判断、扣减和用户集合写入在一个 Lua 脚本内执行；脚本成功后由 API 将事件发布到 RabbitMQ，避免并发交错导致库存变负。
 
 ### 第二层：MySQL 条件更新
 
@@ -213,7 +213,7 @@ Worker 落库时再次对活动库存和商品库存做 `stock > 0` 条件扣减
 1. 将请求状态标记为 `FAILED`；
 2. 通过 Redis Lua 将活动预扣库存加回；
 3. 从活动购买集合移除用户；
-4. ACK 当前 Stream 消息，避免无限重复消费。
+4. ACK 当前 RabbitMQ 消息，避免无限重复消费。
 
 这样可以把 Redis 中已经占用但没有形成订单的临时状态释放出来。
 
@@ -221,7 +221,7 @@ Worker 落库时再次对活动库存和商品库存做 `stock > 0` 条件扣减
 
 | 状态 | 含义 |
 | --- | --- |
-| `ACCEPTED` | Redis 已完成原子受理，事件已写入 Stream |
+| `ACCEPTED` | Redis 已完成原子受理，事件已发布到 RabbitMQ |
 | `PROCESSING` | Worker 已领取事件，正在执行 MySQL 事务 |
 | `SUCCEEDED` | MySQL 订单已创建，并记录订单 ID |
 | `FAILED` | 最终落库失败，已执行 Redis 补偿或记录失败原因 |
@@ -256,11 +256,11 @@ router/                         # 普通业务路由和 Handler
 service/                        # 普通业务 Service
 
 internal/redisstore/
-└── store.go                    # Redis Key、Lua、Stream 操作
+└── store.go                    # Redis Key、Lua 和库存状态操作
 internal/optimized/
 ├── router.go                   # 优化秒杀接口
 ├── service.go                  # 受理、发布、状态和落库业务
-└── worker.go                   # Stream 消费和失败补偿
+└── worker.go                   # RabbitMQ 消费和失败补偿
 internal/observability/
 ├── metrics.go                  # Prometheus 指标
 └── middleware.go               # HTTP 指标中间件
@@ -303,6 +303,8 @@ k6 run .\benchmark\k6\optimized-admission.js
 
 当前仓库只准备代码和压测入口，正式压测数据应在统一实验条件下生成并保存，包括 commit SHA、库存量、VU 数、持续时间、吞吐量、延迟分位数、错误率、最终订单数和机器资源使用情况。
 
+RabbitMQ 使用 durable queue、persistent messages、publisher confirms 和手动 ACK。API 发布失败时会将 Redis 预扣状态补偿并返回 `503`；Worker 处理失败时会记录 `FAILED`、执行库存补偿并拒绝当前消息，避免把未落库请求误报为成功。单机版本没有额外的死信集群或跨机故障转移，这些属于后续生产化工作。
+
 ## 11. 与普通基线版的对比边界
 
 普通版位于原仓库 `yushangcan/go_shope`，基线标签为 `baseline-v1.0.0`；优化版位于 `yushangcan/go_shope_optimized`，代码标签为 `optimized-code-v1`。
@@ -322,7 +324,7 @@ k6 run .\benchmark\k6\optimized-admission.js
 
 可以在简历中这样描述：
 
-> 基于 Go、Gin、GORM、MySQL 和 Redis 实现单机高并发秒杀系统。使用 Redis Lua 将活动校验、request_id 幂等、一人一单和库存预扣合并为原子操作，避免并发超卖；通过 Redis Streams 解耦请求受理与订单落库，由 Worker 异步执行 MySQL 事务，并结合数据库唯一索引、重复消费检查和失败补偿保证订单一致性；设计 `ACCEPTED/PROCESSING/SUCCEEDED/FAILED` 状态机及 Prometheus 指标，使用 k6 对同步基线版和异步优化版进行统一压测对比。
+> 基于 Go、Gin、GORM、MySQL、Redis 和 RabbitMQ 实现单机高并发秒杀系统。使用 Redis Lua 将活动校验、request_id 幂等、一人一单和库存预扣合并为原子操作，避免并发超卖；通过 RabbitMQ 持久化队列解耦请求受理与订单落库，由 Worker 异步执行 MySQL 事务，并结合数据库唯一索引、重复消费检查和失败补偿保证订单一致性；设计 `ACCEPTED/PROCESSING/SUCCEEDED/FAILED` 状态机及 Prometheus 指标，使用 k6 对同步基线版和异步优化版进行统一压测对比。
 
 如果还没有完成正式压测，不应在简历中填写具体 QPS、p95、p99 或成功率。完成真实压测后，再根据实验记录补充数据和机器配置。
 
@@ -342,7 +344,7 @@ Redis 是高并发入口状态，MySQL 是最终持久化事实。唯一索引�
 
 ### 202 返回是不是下单成功？
 
-不是。202 只表示请求被 Redis 接受并进入 Stream。必须查询 request status，并核对 MySQL 订单，才能确认最终成功或失败。
+不是。202 只表示请求被 Redis 接受并发布到 RabbitMQ。必须查询 request status，并核对 MySQL 订单，才能确认最终成功或失败。
 
 ### 这个项目的高可用做到什么程度？
 
@@ -357,4 +359,3 @@ Redis 是高并发入口状态，MySQL 是最终持久化事实。唯一索引�
 - k6 受理、查询、重复请求和售罄场景已准备；
 - `go build ./...` 和 Compose 配置检查已完成；
 - 正式压测、故障注入和性能数据采集尚未执行。
-
