@@ -118,7 +118,7 @@ func (s *Store) Read(ctx context.Context, group, consumer string, count int, blo
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	var events []OrderEvent
 	for _, stream := range entries {
