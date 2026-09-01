@@ -3,7 +3,7 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local-mysql-password}
       MYSQL_DATABASE: go_shope
     volumes:
       - optimized_mysql_data:/var/lib/mysql
@@ -29,8 +29,8 @@ services:
     image: rabbitmq:3.13-management-alpine
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: seckill
-      RABBITMQ_DEFAULT_PASS: seckillpass
+      RABBITMQ_DEFAULT_USER: ${MQ_USER:-seckill}
+      RABBITMQ_DEFAULT_PASS: ${MQ_PASSWORD:-local-mq-password}
     volumes:
       - optimized_rabbitmq_data:/var/lib/rabbitmq
     ports:
@@ -50,10 +50,10 @@ services:
       redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     environment: &app-env
-      MYSQL_DSN: "root:root123456@tcp(mysql:3306)/go_shope?charset=utf8mb4&parseTime=True&loc=Local"
-      JWT_SECRET: "change-this-local-development-jwt-secret-2026"
+      MYSQL_DSN: "root:${MYSQL_ROOT_PASSWORD:-local-mysql-password}@tcp(mysql:3306)/go_shope?charset=utf8mb4&parseTime=True&loc=Local"
+      JWT_SECRET: "${JWT_SECRET:-change-this-local-development-jwt-secret-2026}"
       REDIS_ADDR: "redis:6379"
-      MQ_URL: "amqp://seckill:seckillpass@rabbitmq:5672/"
+      MQ_URL: "amqp://${MQ_USER:-seckill}:${MQ_PASSWORD:-local-mq-password}@rabbitmq:5672/"
       MQ_QUEUE: "seckill.orders"
     ports: ["8081:8080"]
   worker:

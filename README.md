@@ -4,6 +4,8 @@
 
 详细的项目介绍、架构、流程、面试讲解和简历表述见 [`docs/PROJECT-INTRODUCTION.md`](docs/PROJECT-INTRODUCTION.md)。
 
+云服务器部署、机器规格、端口和压测切换步骤见 [`docs/CLOUD-DEPLOYMENT.md`](docs/CLOUD-DEPLOYMENT.md)。
+
 ## 核心流程
 
 ```text
